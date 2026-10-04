@@ -1,0 +1,2 @@
+# Pin FastMCP to avoid unexpected changes between major releases.
+fastmcp==4.0.11

@@ -1,0 +1,9 @@
+# Exclude local environments, secrets, and generated Python files.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+.mypy_cache/
+.ruff_cache/

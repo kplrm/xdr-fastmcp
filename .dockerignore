@@ -1,0 +1,14 @@
+# Keep local metadata, secrets, and caches out of the build context.
+.git/
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.py[cod]
+.env
+.env.*
+.mypy_cache/
+.ruff_cache/
+# Tools are supplied at runtime and must never enter the image build context.
+tools/

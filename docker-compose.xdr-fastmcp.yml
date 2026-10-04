@@ -1,0 +1,26 @@
+services:
+  xdr-fastmcp:
+    build:
+      context: .
+    image: xdr-fastmcp:local
+    ports:
+      # Keep the unauthenticated local endpoint bound to the host loopback address.
+      - "127.0.0.1:${XDR_FASTMCP_PORT:-8000}:8000"
+    volumes:
+      # Load local tools without rebuilding; the container cannot modify them.
+      - ./tools:/app/tools:ro
+    # Forward signals and reap exited child processes launched by tools.
+    init: true
+    restart: unless-stopped
+    # Docker rotates captured logs automatically and removes the oldest file.
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "3"
+    # Remove Linux capabilities; ordinary Python tools do not require them.
+    cap_drop:
+      - ALL
+    # Prevent processes from gaining privileges through executable files.
+    security_opt:
+      - no-new-privileges:true
