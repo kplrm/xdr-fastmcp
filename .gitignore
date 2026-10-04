@@ -5,5 +5,8 @@ __pycache__/
 *.py[cod]
 .env
 .env.*
+!.env.example
 .mypy_cache/
 .ruff_cache/
+# Local CA certificates are deployment configuration.
+certs/

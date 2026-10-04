@@ -12,3 +12,4 @@ __pycache__/
 .ruff_cache/
 # Tools are supplied at runtime and must never enter the image build context.
 tools/
+certs/

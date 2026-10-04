@@ -3,10 +3,13 @@
 A Dockerized [FastMCP](https://gofastmcp.com/) server that automatically exposes
 Python functions from `tools/` over Streamable HTTP.
 
+<div align="center">
+  <img src="images/XDR_FastMCP-example.png" alt="XDR FastMCP tool example" width="400">
+</div>
+
 ## Deploy locally
 
-Install Docker Engine (or Docker Desktop) with Docker Compose, then run from this
-repository:
+Install Docker Engine on Linux with Docker Compose, then run from this repository:
 
 ```sh
 docker compose -f docker-compose.xdr-fastmcp.yml up -d --build
@@ -26,10 +29,20 @@ docker compose -f docker-compose.xdr-fastmcp.yml down
 ```
 
 Compose mounts local `tools/` at `/app/tools` read-only and runs as a non-root
-user. There is no authentication configured; add authentication and TLS before
+user. Host networking reaches local OpenSearch; MCP binds to `127.0.0.1`.
+There is no MCP authentication configured; add authentication and TLS before
 exposing it beyond your local machine.
 
 For a standalone image build: `docker build -t xdr-fastmcp:local .`.
+
+## OpenSearch configuration
+
+Edit local `.env` (copy of `.env.example`). With `OPENSEARCH_VERIFY_TLS=true`,
+copy the CA from the running OpenSearch and set `OPENSEARCH_CA_FILE` accordingly:
+
+```sh
+docker cp opensearch-node:/usr/share/opensearch/config/root-ca.pem certs/opensearch-root-ca.pem
+```
 
 ## Tool discovery
 

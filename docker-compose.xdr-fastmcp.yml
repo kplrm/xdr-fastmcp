@@ -4,12 +4,16 @@ services:
       context: .
     image: xdr-fastmcp:local
     container_name: xdr-fastmcp
-    ports:
-      # Keep the unauthenticated local endpoint bound to the host loopback address.
-      - "127.0.0.1:${XDR_FASTMCP_PORT:-8000}:8000"
+    # Pass local credentials to tools; the file is optional.
+    env_file:
+      - path: ./.env
+        required: false
+    network_mode: host
     volumes:
       # Load local tools without rebuilding; the container cannot modify them.
       - ./tools:/app/tools:ro
+      # Load trusted CA certificates.
+      - ./certs:/app/certs:ro
     # Forward signals and reap exited child processes launched by tools.
     init: true
     restart: unless-stopped
