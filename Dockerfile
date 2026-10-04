@@ -1,17 +1,15 @@
 FROM python:3.12-slim
 
-# Log immediately and keep runtime writes in the container's temporary directory.
+# Log immediately and avoid writing Python bytecode files.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    HOME=/tmp
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 # Cache dependency installation until requirements change.
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt \
-    && groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --no-create-home --home-dir /tmp app
+    && groupadd --gid 10001 fastmcp \
+    && useradd --uid 10001 --gid fastmcp --no-create-home --home-dir /tmp fastmcp
 
 # Include the server and license; tool code is supplied through the runtime mount.
 COPY server.py LICENSE ./
