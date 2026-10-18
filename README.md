@@ -53,8 +53,7 @@ Run from this repository on a host with cluster access. This assumes namespace `
 
 ### Create the OpenSearch user and role
 
-Use the `fastmcp` user with only the `telemetry_read` role, scoped by
-[telemetry-read-role.json](deploy/telemetry-read-role.json) to read `xdr-agent-telemetry`.
+Create only read role `telemetry_read`, scoped by [telemetry-read-role.json](deploy/telemetry-read-role.json) to read `xdr-agent-telemetry`.
 
 ```bash
 OS_URL='https://OPENSEARCH_HOST:PORT'
@@ -65,13 +64,15 @@ curl --fail-with-body --cacert "$OS_CA" --user admin \
   --data-binary @deploy/xdr-fastmcp-role.json
 ```
 
+Create the user `xdr-fastmcp`.
+
 ```bash
 read -rsp 'FastMCP password (same as private .env): ' FASTMCP_PASSWORD
 printf '\n'
 jq -n --arg password "$FASTMCP_PASSWORD" \
   '{password: $password, opendistro_security_roles: ["telemetry_read"]}' |
 curl --fail-with-body --cacert "$OS_CA" --user admin \
-  --request PUT "$OS_URL/_plugins/_security/api/internalusers/fastmcp" \
+  --request PUT "$OS_URL/_plugins/_security/api/internalusers/xdr-fastmcp" \
   --header 'Content-Type: application/json' --data-binary @-
 unset FASTMCP_PASSWORD
 ```
@@ -82,11 +83,18 @@ The image tag supports AMD64 and ARM64; Kubernetes selects the matching image.
 
 Edit values in `.env.example` and save your changes to `.env.fastmcp`.
 
-```sh
+```bash
 kubectl -n opensearch create secret generic xdr-fastmcp-env \
   --from-env-file=.env.fastmcp --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n opensearch apply -f kubernetes.yaml
 kubectl -n opensearch rollout status deployment/xdr-fastmcp --timeout=120s
+```
+
+Test connectivity to OpenSearch from the deployed FastMCP pod.
+
+```bash
+kubectl -n opensearch exec deployment/xdr-fastmcp -- python -c \
+  'from tools.top_remote_ips import top_remote_ips; top_remote_ips(); print("OpenSearch access OK")'
 ```
 
 Connect your MCP client to `http://xdr-fastmcp.opensearch.svc.cluster.local:8000/mcp`.
