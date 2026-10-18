@@ -49,33 +49,32 @@ docker pull ghcr.io/kplrm/xdr-fastmcp:latest
 
 ## Deploy on Kubernetes (one pod)
 
-Run from this repository against your existing cluster. This reuses namespace
-`opensearch`, Service `opensearch-cluster-master`, and ConfigMap `opensearch-ca`
-from your OpenSearch deployment; no PVC is needed.
+Run from this repository on a host with cluster access. This assumes namespace `opensearch`.
 
-Copy `.env.example` to `.env` if needed and set `TOKEN` or basic credentials
-with read access to `xdr-agent-telemetry`. The `log_ingest` account cannot read.
-The manifest overrides the local URL and CA path with the cluster values.
+### Create the OpenSearch user and role
 
-```sh
-kubectl -n opensearch create secret generic xdr-fastmcp-env \
-  --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n opensearch create configmap xdr-fastmcp-tools \
-  --from-file=tools/ --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n opensearch apply -f kubernetes.yaml
-kubectl -n opensearch rollout status deployment/xdr-fastmcp --timeout=120s
-kubectl -n opensearch port-forward service/xdr-fastmcp 8000:8000
+Use the `fastmcp` user with only the `telemetry_read` role, scoped by
+[telemetry-read-role.json](deploy/telemetry-read-role.json) to read `xdr-agent-telemetry`.
+
+```bash
+OS_URL='https://OPENSEARCH_HOST:PORT'
+OS_CA='/path/to/opensearch-ca.pem'
+curl --fail-with-body --cacert "$OS_CA" --user admin \
+  --request PUT "$OS_URL/_plugins/_security/api/roles/xdr_fastmcp" \
+  --header 'Content-Type: application/json' \
+  --data-binary @deploy/xdr-fastmcp-role.json
 ```
 
-In another terminal, check `curl --fail http://127.0.0.1:8000/health` and connect
-your MCP client to `http://127.0.0.1:8000/mcp`. Cluster clients use
-`http://xdr-fastmcp.opensearch.svc.cluster.local:8000/mcp`.
-The Service is internal; add authentication and TLS before exposing MCP publicly.
-
-Tools are mounted from the ConfigMap. After changing tools or `.env`, rerun
-the corresponding creation command and `kubectl -n opensearch rollout restart deployment/xdr-fastmcp`.
-To update the image, set `image:` in `kubernetes.yaml` to the desired
-`sha-<full-commit>` tag and apply it again. Updates briefly interrupt the single pod.
+```bash
+read -rsp 'FastMCP password (same as private .env): ' FASTMCP_PASSWORD
+printf '\n'
+jq -n --arg password "$FASTMCP_PASSWORD" \
+  '{password: $password, opendistro_security_roles: ["telemetry_read"]}' |
+curl --fail-with-body --cacert "$OS_CA" --user admin \
+  --request PUT "$OS_URL/_plugins/_security/api/internalusers/fastmcp" \
+  --header 'Content-Type: application/json' --data-binary @-
+unset FASTMCP_PASSWORD
+```
 
 ## OpenSearch configuration
 
@@ -88,9 +87,12 @@ docker cp opensearch-node:/usr/share/opensearch/config/root-ca.pem certs/opensea
 
 ## Tool discovery
 
-Store Python tools in local `tools/`. Tools load automatically at startup.
-Tools are mounted by Compose and excluded from the image build. After editing
-tools, restart the container:
+Store Python tools in local `tools/`; they are excluded from the image.
+Compose mounts this folder directly. In Kubernetes, the init container
+downloads the files from GitHub into the pod's shared volume.
+The server registers public functions from these files at startup.
+For Kubernetes, push tool changes to GitHub and restart the deployment.
+For Compose, restart after editing tools:
 
 ```sh
 docker compose -f docker-compose.xdr-fastmcp.yml restart xdr-fastmcp

@@ -1,0 +1,10 @@
+{
+  "cluster_permissions": [],
+  "index_permissions": [
+    {
+      "index_patterns": ["xdr-agent-telemetry"],
+      "allowed_actions": ["read"]
+    }
+  ],
+  "tenant_permissions": []
+}
