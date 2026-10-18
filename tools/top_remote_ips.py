@@ -16,11 +16,11 @@ class _NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def top_destination_ips() -> dict:
-    """Return the top five destination IPs by event count across all network telemetry.
+def top_remote_ips() -> dict:
+    """Return the top five remote IPs by event count across all network telemetry.
 
     Counts both opened and closed events, not unique connections. Events without
-    a destination IP do not enter the ranking. Reads all available dates; counts
+    a remote IP do not enter the ranking. Reads all available dates; counts
     can change if telemetry is updated during pagination.
     """
     url = os.environ.get("OPENSEARCH_URL", "").rstrip("/")
@@ -52,15 +52,15 @@ def top_destination_ips() -> dict:
     ca_file = os.environ.get("OPENSEARCH_CA_FILE") or None
     context = ssl.create_default_context(cafile=ca_file) if verify == "true" else ssl._create_unverified_context()
     opener = build_opener(_NoRedirects(), HTTPSHandler(context=context))
-    endpoint = (f"{url}/.xdr-agent-telemetry-*/_search"
+    endpoint = (f"{url}/xdr-agent-telemetry/_search"
                 "?expand_wildcards=open,hidden&allow_no_indices=true&ignore_unavailable=true")
     composite = {"size": 1000, "sources": [
-        {"ip": {"terms": {"field": "payload.destination.ip"}}},
+        {"ip": {"terms": {"field": "remote.ip"}}},
     ]}
     body = {
         "size": 0, "track_total_hits": True,
         "query": {"term": {"event.module": "telemetry.network"}},
-        "aggs": {"destinations": {"composite": composite}},
+        "aggs": {"remote_ips": {"composite": composite}},
     }
     top = []
     total = 0
@@ -86,7 +86,7 @@ def top_destination_ips() -> dict:
         if body["track_total_hits"]:
             total = int(result["hits"]["total"]["value"])
             body["track_total_hits"] = False
-        aggregation = result["aggregations"]["destinations"]
+        aggregation = result["aggregations"]["remote_ips"]
         # Page every IP to avoid approximate top counts across multiple shards.
         for bucket in aggregation["buckets"]:
             top.append({"ip": str(bucket["key"]["ip"]), "count": int(bucket["doc_count"])})
@@ -97,4 +97,4 @@ def top_destination_ips() -> dict:
         if after == composite.get("after"):
             raise RuntimeError("OpenSearch pagination did not advance.")
         composite["after"] = after
-    return {"total_network_events": total, "destinations": top}
+    return {"total_network_events": total, "remote_ips": top}
