@@ -18,9 +18,7 @@ curl --fail http://127.0.0.1:8000/health
 ```
 
 Connect an MCP client using Streamable HTTP at `http://127.0.0.1:8000/mcp`.
-`/health` reports server availability and the number of loaded tools; an empty
-tool list is expected initially. Use an MCP client to connect to `/mcp`.
-For clients on the same Docker network, use `http://xdr-fastmcp:8000/mcp`.
+`/health` reports server availability and the number of loaded tools.
 
 ```sh
 # Inspect logs / stop and remove the local deployment
@@ -29,11 +27,55 @@ docker compose -f docker-compose.xdr-fastmcp.yml down
 ```
 
 Compose mounts local `tools/` at `/app/tools` read-only and runs as a non-root
-user. Host networking reaches local OpenSearch; MCP binds to `127.0.0.1`.
+user. Host networking reaches local OpenSearch; MCP listens on all interfaces.
 There is no MCP authentication configured; add authentication and TLS before
 exposing it beyond your local machine.
 
 For a standalone image build: `docker build -t xdr-fastmcp:local .`.
+
+## Container image
+
+[GitHub Actions](.github/workflows/container.yml) publishes Linux amd64 images
+to `ghcr.io/kplrm/xdr-fastmcp` on pushes to `main` or manual runs. Main builds
+update `latest`; every build also has a `sha-<full-commit>` tag.
+Publishing uses `GITHUB_TOKEN`; no additional repository secret is needed.
+
+After the first run, [set the package visibility to public](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
+for pulls without credentials, including the Kubernetes deployment below.
+
+```sh
+docker pull ghcr.io/kplrm/xdr-fastmcp:latest
+```
+
+## Deploy on Kubernetes (one pod)
+
+Run from this repository against your existing cluster. This reuses namespace
+`opensearch`, Service `opensearch-cluster-master`, and ConfigMap `opensearch-ca`
+from your OpenSearch deployment; no PVC is needed.
+
+Copy `.env.example` to `.env` if needed and set `TOKEN` or basic credentials
+with read access to `xdr-agent-telemetry`. The `log_ingest` account cannot read.
+The manifest overrides the local URL and CA path with the cluster values.
+
+```sh
+kubectl -n opensearch create secret generic xdr-fastmcp-env \
+  --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n opensearch create configmap xdr-fastmcp-tools \
+  --from-file=tools/ --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n opensearch apply -f kubernetes.yaml
+kubectl -n opensearch rollout status deployment/xdr-fastmcp --timeout=120s
+kubectl -n opensearch port-forward service/xdr-fastmcp 8000:8000
+```
+
+In another terminal, check `curl --fail http://127.0.0.1:8000/health` and connect
+your MCP client to `http://127.0.0.1:8000/mcp`. Cluster clients use
+`http://xdr-fastmcp.opensearch.svc.cluster.local:8000/mcp`.
+The Service is internal; add authentication and TLS before exposing MCP publicly.
+
+Tools are mounted from the ConfigMap. After changing tools or `.env`, rerun
+the corresponding creation command and `kubectl -n opensearch rollout restart deployment/xdr-fastmcp`.
+To update the image, set `image:` in `kubernetes.yaml` to the desired
+`sha-<full-commit>` tag and apply it again. Updates briefly interrupt the single pod.
 
 ## OpenSearch configuration
 

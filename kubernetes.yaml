@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xdr-fastmcp
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: xdr-fastmcp
+  template:
+    metadata:
+      labels:
+        app: xdr-fastmcp
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: xdr-fastmcp
+          image: ghcr.io/kplrm/xdr-fastmcp:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: xdr-fastmcp-env
+          env:
+            - name: OPENSEARCH_URL
+              value: https://opensearch-cluster-master.opensearch.svc.cluster.local:9200
+            - name: OPENSEARCH_VERIFY_TLS
+              value: "true"
+            - name: OPENSEARCH_CA_FILE
+              value: /app/certs/root-ca.pem
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tools
+              mountPath: /app/tools
+              readOnly: true
+            - name: ca
+              mountPath: /app/certs
+              readOnly: true
+      volumes:
+        - name: tools
+          configMap:
+            name: xdr-fastmcp-tools
+        - name: ca
+          configMap:
+            name: opensearch-ca
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xdr-fastmcp
+spec:
+  selector:
+    app: xdr-fastmcp
+  ports:
+    - port: 8000
+      targetPort: http
