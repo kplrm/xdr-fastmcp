@@ -15,6 +15,25 @@ spec:
         app: xdr-fastmcp
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65533
+      initContainers:
+        - name: sync-tools
+          image: registry.k8s.io/git-sync/git-sync:v4.7.1
+          args:
+            - --repo=https://github.com/kplrm/xdr-fastmcp.git
+            - --ref=main
+            - --root=/git
+            - --link=repo
+            - --one-time
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tools
+              mountPath: /git
       containers:
         - name: xdr-fastmcp
           image: ghcr.io/kplrm/xdr-fastmcp:latest
@@ -26,6 +45,8 @@ spec:
             - secretRef:
                 name: xdr-fastmcp-env
           env:
+            - name: PYTHONPATH
+              value: /git/repo
             - name: OPENSEARCH_URL
               value: https://opensearch-cluster-master.opensearch.svc.cluster.local:9200
             - name: OPENSEARCH_VERIFY_TLS
@@ -49,15 +70,14 @@ spec:
               drop: [ALL]
           volumeMounts:
             - name: tools
-              mountPath: /app/tools
+              mountPath: /git
               readOnly: true
             - name: ca
               mountPath: /app/certs
               readOnly: true
       volumes:
         - name: tools
-          configMap:
-            name: xdr-fastmcp-tools
+          emptyDir: {}
         - name: ca
           configMap:
             name: opensearch-ca

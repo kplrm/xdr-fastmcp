@@ -76,34 +76,32 @@ curl --fail-with-body --cacert "$OS_CA" --user admin \
 unset FASTMCP_PASSWORD
 ```
 
-## OpenSearch configuration
+### Deploy and verify
 
-Edit local `.env` (copy of `.env.example`). With `OPENSEARCH_VERIFY_TLS=true`,
-copy the CA from the running OpenSearch and set `OPENSEARCH_CA_FILE` accordingly:
+The image tag supports AMD64 and ARM64; Kubernetes selects the matching image.
+
+Edit values in `.env.example` and save your changes to `.env.fastmcp`.
 
 ```sh
-docker cp opensearch-node:/usr/share/opensearch/config/root-ca.pem certs/opensearch-root-ca.pem
+kubectl -n opensearch create secret generic xdr-fastmcp-env \
+  --from-env-file=.env.fastmcp --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n opensearch apply -f kubernetes.yaml
+kubectl -n opensearch rollout status deployment/xdr-fastmcp --timeout=120s
 ```
+
+Connect your MCP client to `http://xdr-fastmcp.opensearch.svc.cluster.local:8000/mcp`.
 
 ## Tool discovery
 
-Store Python tools in local `tools/`; they are excluded from the image.
-Compose mounts this folder directly. In Kubernetes, the init container
-downloads the files from GitHub into the pod's shared volume.
-The server registers public functions from these files at startup.
-For Kubernetes, push tool changes to GitHub and restart the deployment.
-For Compose, restart after editing tools:
+Tools stay outside the image. Compose mounts local `tools/`; each new Kubernetes
+pod downloads GitHub `main` and loads its tools at startup. Push tool changes,
+then run:
 
 ```sh
-docker compose -f docker-compose.xdr-fastmcp.yml restart xdr-fastmcp
+kubectl -n opensearch rollout restart deployment/xdr-fastmcp
 ```
 
-Add Python dependencies to `requirements.txt`, then rebuild the image and update
-the container:
-
-```sh
-docker compose -f docker-compose.xdr-fastmcp.yml up -d --build
-```
+Dependency changes in `requirements.txt` require publishing a new image first.
 
 ## License
 
